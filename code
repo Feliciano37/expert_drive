@@ -1,0 +1,302 @@
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  Button,
+  StyleSheet,
+  Image,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  Platform,
+} from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import Constants from 'expo-constants';
+
+// Componente principal do aplicativo
+const App = () => {
+  // Estado para armazenar a URI da imagem selecionada
+  const [selectedImageUri, setSelectedImageUri] = useState(null);
+  // Estado para armazenar a URI da música selecionada
+  const [selectedMusicUri, setSelectedMusicUri] = useState(null);
+  // Estado para armazenar o nome da música selecionada
+  const [selectedMusicName, setSelectedMusicName] = useState(null);
+  // Estado para armazenar a lista de arquivos agrupados
+  const [groupedFiles, setGroupedFiles] = useState([]);
+
+  // Função para solicitar permissão de acesso à galeria de mídia
+  const requestMediaLibraryPermission = async () => {
+    if (Platform.OS !== 'web') {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permissão Necessária',
+          'Precisamos da sua permissão para acessar a galeria de fotos para que isso funcione!'
+        );
+        return false;
+      }
+    }
+    return true;
+  };
+
+  // Função para selecionar uma imagem
+  const pickImage = async () => {
+    const hasPermission = await requestMediaLibraryPermission();
+    if (!hasPermission) return;
+
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, // Apenas imagens
+      allowsEditing: false, // Não permite edição
+      aspect: [4, 3], // Proporção da imagem
+      quality: 1, // Qualidade da imagem
+    });
+
+    if (!result.canceled) {
+      setSelectedImageUri(result.assets[0].uri);
+    }
+  };
+
+  // Função para selecionar um arquivo de música
+  const pickMusic = async () => {
+    try {
+      let result = await DocumentPicker.getDocumentAsync({
+        type: 'audio/*', // Apenas arquivos de áudio
+        copyToCacheDirectory: true, // Copia para o diretório de cache
+      });
+
+      if (!result.canceled) {
+        setSelectedMusicUri(result.assets[0].uri);
+        setSelectedMusicName(result.assets[0].name);
+      }
+    } catch (err) {
+      console.error('Erro ao selecionar música:', err);
+      Alert.alert('Erro', 'Não foi possível selecionar o arquivo de música.');
+    }
+  };
+
+  // Função para agrupar a imagem e a música selecionadas
+  const groupFiles = () => {
+    if (selectedImageUri && selectedMusicUri) {
+      const newGroup = {
+        id: Date.now().toString(), // ID único para o grupo
+        imageUri: selectedImageUri,
+        musicUri: selectedMusicUri,
+        musicName: selectedMusicName,
+      };
+      setGroupedFiles([...groupedFiles, newGroup]);
+      // Limpa as seleções atuais
+      setSelectedImageUri(null);
+      setSelectedMusicUri(null);
+      setSelectedMusicName(null);
+      Alert.alert('Sucesso', 'Imagem e música agrupadas!');
+    } else {
+      Alert.alert('Atenção', 'Por favor, selecione uma imagem e uma música primeiro.');
+    }
+  };
+
+  // Função para remover um grupo
+  const removeGroup = (id) => {
+    Alert.alert(
+      'Remover Grupo',
+      'Tem certeza que deseja remover este grupo?',
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+        {
+          text: 'Remover',
+          onPress: () => {
+            setGroupedFiles(groupedFiles.filter((group) => group.id !== id));
+            Alert.alert('Removido', 'Grupo removido com sucesso.');
+          },
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.header}>Agrupador de Fotos e Músicas</Text>
+
+      {/* Seção de Seleção de Arquivos */}
+      <View style={styles.selectionSection}>
+        <TouchableOpacity style={styles.button} onPress={pickImage}>
+          <Text style={styles.buttonText}>Selecionar Imagem (JPG)</Text>
+        </TouchableOpacity>
+        {selectedImageUri && (
+          <Image source={{ uri: selectedImageUri }} style={styles.imagePreview} />
+        )}
+
+        <TouchableOpacity style={styles.button} onPress={pickMusic}>
+          <Text style={styles.buttonText}>Selecionar Música</Text>
+        </TouchableOpacity>
+        {selectedMusicName && (
+          <Text style={styles.musicFileName}>Música Selecionada: {selectedMusicName}</Text>
+        )}
+
+        <TouchableOpacity
+          style={[styles.button, styles.groupButton]}
+          onPress={groupFiles}
+          disabled={!selectedImageUri || !selectedMusicUri}
+        >
+          <Text style={styles.buttonText}>Agrupar Imagem e Música</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Seção de Arquivos Agrupados */}
+      <Text style={styles.groupedHeader}>Arquivos Agrupados:</Text>
+      {groupedFiles.length === 0 ? (
+        <Text style={styles.noFilesText}>Nenhum arquivo agrupado ainda.</Text>
+      ) : (
+        <ScrollView style={styles.groupedList}>
+          {groupedFiles.map((group) => (
+            <View key={group.id} style={styles.groupedItem}>
+              <Image source={{ uri: group.imageUri }} style={styles.groupedImage} />
+              <View style={styles.groupedTextContainer}>
+                <Text style={styles.groupedMusicName}>Música: {group.musicName}</Text>
+                <TouchableOpacity
+                  style={styles.removeButton}
+                  onPress={() => removeGroup(group.id)}
+                >
+                  <Text style={styles.removeButtonText}>Remover</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+    </View>
+  );
+};
+
+// Estilos para o aplicativo
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    paddingTop: Constants.statusBarHeight,
+    backgroundColor: '#f0f4f8',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+  },
+  header: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 20,
+    marginTop: 10,
+    textAlign: 'center',
+  },
+  selectionSection: {
+    width: '100%',
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    alignItems: 'center',
+  },
+  button: {
+    backgroundColor: '#3498db',
+    paddingVertical: 12,
+    paddingHorizontal: 25,
+    borderRadius: 8,
+    marginVertical: 10,
+    width: '80%',
+    alignItems: 'center',
+  },
+  buttonText: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  groupButton: {
+    backgroundColor: '#2ecc71',
+    marginTop: 20,
+  },
+  imagePreview: {
+    width: 150,
+    height: 150,
+    borderRadius: 10,
+    marginTop: 15,
+    marginBottom: 10,
+    borderColor: '#bdc3c7',
+    borderWidth: 1,
+    resizeMode: 'cover',
+  },
+  musicFileName: {
+    fontSize: 16,
+    color: '#555555',
+    marginTop: 10,
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  groupedHeader: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+    marginBottom: 15,
+    alignSelf: 'flex-start',
+    marginLeft: 10,
+  },
+  groupedList: {
+    width: '100%',
+  },
+  groupedItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  groupedImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 8,
+    marginRight: 15,
+    resizeMode: 'cover',
+  },
+  groupedTextContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  groupedMusicName: {
+    fontSize: 16,
+    color: '#333333',
+    flexShrink: 1, // Permite que o texto quebre linha se for muito longo
+  },
+  removeButton: {
+    backgroundColor: '#e74c3c',
+    paddingVertical: 8,
+    paddingHorizontal: 15,
+    borderRadius: 5,
+    marginLeft: 10,
+  },
+  removeButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  noFilesText: {
+    fontSize: 16,
+    color: '#7f8c8d',
+    textAlign: 'center',
+    marginTop: 20,
+  },
+});
+
+export default App;
